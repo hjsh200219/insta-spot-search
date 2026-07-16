@@ -1,0 +1,17 @@
+{
+  "$schema": "https://anthropic.com/claude-code/marketplace.schema.json",
+  "name": "insta-spot-search",
+  "description": "인스타 릴스 속 장소 역추적 스킬 마켓플레이스",
+  "owner": {
+    "name": "hjsh200219",
+    "url": "https://github.com/hjsh200219"
+  },
+  "plugins": [
+    {
+      "name": "insta-spot-search",
+      "source": "./",
+      "description": "인스타그램 릴스/틱톡/쇼츠 홍보 영상 속 장소를 영상 프레임·캡션·댓글 단서로 역추적",
+      "category": "productivity"
+    }
+  ]
+}
