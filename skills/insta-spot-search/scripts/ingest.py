@@ -50,7 +50,8 @@ def check_binaries(need_ytdlp):
     missing = [b for b in (["yt-dlp"] if need_ytdlp else []) + ["ffmpeg", "ffprobe"]
                if shutil.which(b) is None]
     if missing:
-        die(2, f"missing binaries: {', '.join(missing)} — install with: brew install {' '.join(missing)}")
+        setup = os.path.join(os.path.dirname(os.path.abspath(__file__)), "setup.py")
+        die(2, f"missing binaries: {', '.join(missing)} — run: python3 {setup}")
 
 
 def download(url, out_dir, comments_wanted, cookies_browser):

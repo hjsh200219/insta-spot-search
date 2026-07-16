@@ -27,12 +27,33 @@ metadata:
 - 영상이 특정 개인(크리에이터 아닌 제3자)의 사적 공간을 비추고 사용자가 그 사람 위치를 묻는 경우 → 거부.
 - 스토킹·괴롭힘 정황이 보이면 진행하지 않는다.
 
+## Step 0 — Setup preflight (매 호출, 성공 시 무음)
+
+먼저 모든 Bash 호출에서 쓸 스킬 경로를 잡는다 (이후 Step에서도 이 `$SKILL_DIR` 재사용 — 셸 상태는 호출 간 유지 안 되므로 매 Bash 블록에서 다시 정의):
+
+```bash
+SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+${CLAUDE_PLUGIN_ROOT}/skills/insta-spot-search}"
+SKILL_DIR="${SKILL_DIR:-${CLAUDE_SKILL_DIR}}"
+python3 "${SKILL_DIR}/scripts/setup.py" --check
+```
+
+<100ms 조회. **exit 0이면 아무것도 출력 안 하고 Step 1로 진행 — "설치 완료" 같은 상태 메시지 사용자에게 띄우지 말 것.**
+
+exit 2 (yt-dlp/ffmpeg/ffprobe 없음)면 설치 스크립트 실행 (idempotent):
+
+```bash
+python3 "${SKILL_DIR}/scripts/setup.py"
+```
+
+- **macOS**: Homebrew로 `yt-dlp`, `ffmpeg` 자동 설치.
+- **Linux/Windows**: 정확한 설치 명령을 stderr로 출력 → 사용자에게 그 명령 실행 요청.
+- Homebrew 자체가 없으면 https://brew.sh 안내 후 수동 설치 명령 제시.
+
+세션 내 후속 호출에서는 Step 0 생략 가능 (한 번 exit 0이면 환경 안 바뀜).
+
 ## Step 1 — Ingest (영상 → 단서 원료)
 
 ```bash
-# 플러그인 설치면 CLAUDE_PLUGIN_ROOT, 단독 스킬 설치면 CLAUDE_SKILL_DIR 가 잡힌다
-SKILL_DIR="${CLAUDE_PLUGIN_ROOT:+${CLAUDE_PLUGIN_ROOT}/skills/insta-spot-search}"
-SKILL_DIR="${SKILL_DIR:-${CLAUDE_SKILL_DIR}}"
 python3 "${SKILL_DIR}/scripts/ingest.py" "<url-or-path>" --out-dir <workdir>
 ```
 
@@ -117,7 +138,7 @@ python3 "${SKILL_DIR}/scripts/ingest.py" "<url-or-path>" --out-dir <workdir>
 
 | 증상 | 대응 |
 |---|---|
-| exit 2 (바이너리 없음) | `brew install yt-dlp ffmpeg` 후 재시도 |
+| exit 2 (바이너리 없음) | `python3 ${SKILL_DIR}/scripts/setup.py` 실행 (macOS 자동 설치, 그 외 명령 안내) |
 | exit 3 (로그인 벽) | 쿠키 재시도 자동. 실패 시 사용자에게 브라우저 로그인 상태 확인 요청. 그래도 안 되면 URL 유효성(삭제/비공개)부터 의심 |
 | exit 4 (다운로드/프로브 실패) | URL 오타/삭제된 게시물/비공개 계정/쿠키 추출 실패/ffprobe 실패. stderr 원문 확인 후 사용자에게 안내 |
 | exit 5 (프레임 추출 실패) | 영상 파일 손상 가능성. 재다운로드 또는 `--fps` 낮춰 재시도 |

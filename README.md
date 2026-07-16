@@ -13,7 +13,7 @@ Claude Code 안에서:
 /plugin install insta-spot-search@insta-spot-search
 ```
 
-요구 바이너리: `yt-dlp`, `ffmpeg` (`brew install yt-dlp ffmpeg`) — 없으면 스킬이 설치 안내를 띄운다.
+요구 바이너리: `yt-dlp`, `ffmpeg`. **직접 설치할 필요 없다** — 스킬 첫 실행 시 preflight가 자동 감지해 macOS면 Homebrew로 자동 설치하고, Linux/Windows면 정확한 설치 명령을 안내한다.
 
 ## 사용
 
