@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# insta-spot-search pre-commit hook — fast subset of scripts/gc.sh.
+#
+# Runs on every `git commit`. Kept intentionally cheap (no network, no external
+# binaries): docs verify + py_compile + stdlib unittest. The full gate lives in
+# scripts/gc.sh (adds preflight + optional ruff/coverage).
+#
+# Installed via: git config core.hooksPath .githooks
+# Bypass a single commit with: git commit --no-verify
+set -euo pipefail
+
+REPO_ROOT="$(git rev-parse --show-toplevel)"
+cd "$REPO_ROOT"
+
+echo "[pre-commit] verify-docs..."
+python3 scripts/verify-docs.py
+
+echo "[pre-commit] py_compile..."
+python3 -m py_compile \
+  skills/insta-spot-search/scripts/ingest.py \
+  skills/insta-spot-search/scripts/setup.py \
+  scripts/verify-docs.py
+
+echo "[pre-commit] unittest..."
+python3 -m unittest discover -s tests -p 'test_*.py'
+
+echo "[pre-commit] OK"

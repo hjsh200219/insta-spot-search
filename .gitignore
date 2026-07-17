@@ -2,3 +2,10 @@ __pycache__/
 *.pyc
 .omc/
 .DS_Store
+_workspace/
+# optional quality-tool artifacts (gc.sh runs coverage/ruff when installed)
+.coverage
+htmlcov/
+.ruff_cache/
+.pytest_cache/
+.mypy_cache/

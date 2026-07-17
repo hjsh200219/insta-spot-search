@@ -4,14 +4,20 @@
 Modes:
   setup.py --check   Silent preflight. Exit 0 if ready, 2 if binaries missing.
   setup.py --json    Machine-readable status for the agent to parse.
-  setup.py           Installer. Auto-installs yt-dlp + ffmpeg (macOS/brew),
-                     prints exact commands on Linux/Windows.
+  setup.py           Installer. On macOS, `brew install` is a host mutation
+                     beyond the read-only boundary, so it requires consent:
+                     with a TTY stdin, prompts interactively ([y/N]); with a
+                     non-TTY stdin, prints the exact command and exits 2
+                     without installing. Pass --yes to auto-install
+                     non-interactively (skips the prompt). Linux/Windows only
+                     ever print exact commands — never installs there.
 
 Design:
 - Silent on success: --check exits 0 with no output when everything's present
   so the skill doesn't spam a status line on every invocation.
 - Idempotent: re-running is safe — brew skips already-installed packages.
-- Never sudo. On macOS, auto-install via brew. Elsewhere, print exact commands.
+- Never sudo. Consent-gated on macOS: `brew install` only runs with explicit
+  approval (interactive [y/N] or --yes). Elsewhere, print exact commands.
 - No API key handling here — Whisper narration transcription is optional and
   reuses ~/.config/watch/.env when present (see SKILL.md).
 """
@@ -44,7 +50,7 @@ def _brew_pkgs(missing: list[str]) -> list[str]:
     return pkgs
 
 
-def _install_macos(missing: list[str]) -> tuple[bool, str]:
+def _install_macos(missing: list[str], auto_yes: bool) -> tuple[bool, str]:
     if _which("brew") is None:
         return False, (
             "Homebrew not installed. Get it from https://brew.sh, then re-run setup — "
@@ -52,6 +58,20 @@ def _install_macos(missing: list[str]) -> tuple[bool, str]:
         )
     pkgs = _brew_pkgs(missing)
     cmd = ["brew", "install", *pkgs]
+    if not auto_yes:
+        cmd_str = " ".join(cmd)
+        if sys.stdin.isatty():
+            print(f"[setup] this will run: {cmd_str}")
+            try:
+                answer = input("Proceed? [y/N] ")
+            except EOFError:
+                answer = ""
+            if answer.strip().lower() not in ("y", "yes"):
+                return False, "install declined by user"
+        else:
+            sys.stderr.write(f"[setup] {cmd_str}\n")
+            sys.stderr.write("[setup] re-run with --yes to auto-install\n")
+            return False, "consent required (non-interactive stdin): re-run with --yes"
     print(f"[setup] running: {' '.join(cmd)}", file=sys.stderr)
     if subprocess.run(cmd).returncode != 0:
         return False, "brew install failed"
@@ -106,7 +126,7 @@ def cmd_json() -> int:
     return 0
 
 
-def cmd_install() -> int:
+def cmd_install(auto_yes: bool = False) -> int:
     missing = _check_binaries()
     if not missing:
         print("[setup] all dependencies present (yt-dlp, ffmpeg, ffprobe). ready.")
@@ -114,7 +134,7 @@ def cmd_install() -> int:
 
     system = platform.system()
     if system == "Darwin":
-        ok, msg = _install_macos(missing)
+        ok, msg = _install_macos(missing, auto_yes)
         print(f"[setup] {msg}", file=sys.stderr)
         if not ok:
             return 2
@@ -145,7 +165,7 @@ def main() -> int:
             return cmd_check()
         if sys.argv[1] == "--json":
             return cmd_json()
-    return cmd_install()
+    return cmd_install(auto_yes="--yes" in sys.argv[1:])
 
 
 if __name__ == "__main__":

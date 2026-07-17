@@ -51,7 +51,7 @@ Real run: a single 19-second drone reel was pinned to Sacheonjin Beach in
 Gangneung, Korea — address and map link included — by cross-matching the arch
 footbridge, the yellow breakwater lighthouse, and the granite tide-pool rocks.
 
-### Accuracy features (v0.3.0)
+### Accuracy features
 
 - **Comment mining** — flags location-leak comments (Korean + overseas
   place-name patterns), sorted by likes. Popular reels almost always have
@@ -59,8 +59,9 @@ footbridge, the yellow breakwater lighthouse, and the granite tide-pool rocks.
 - **Domestic / overseas branching** — a region-heuristic table (coast type,
   phone area codes, driving side, foreign signage) narrows the search area
   before any query runs.
-- **Narration transcription** — on by default when a Whisper key exists; TTS
-  narration often says things the captions don't.
+- **Narration transcription** (opt-in) — pass `--audio` to extract audio and
+  transcribe narration via Groq/OpenAI Whisper (only when a key exists too);
+  off by default. TTS narration often says things the captions don't.
 - **Zoom refine** (`--start`/`--end` + `--resolution 2048`) — re-extract a
   segment at high resolution to read small signs, from the already-downloaded
   video (no re-download).
@@ -69,15 +70,20 @@ footbridge, the yellow breakwater lighthouse, and the granite tide-pool rocks.
 
 ## Notes
 
-- If Instagram blocks anonymous access, the script auto-retries with browser
-  cookies (`--cookies-browser`, default `chrome`) — just be logged into
-  Instagram in Chrome. Public promotional reels usually work without login.
+- Downloads are **anonymous by default** (`--cookies-browser none`). If
+  Instagram blocks anonymous access (a login wall), re-run with
+  `--cookies-browser chrome` (or `safari`/`firefox`/`edge`/`brave`) to retry
+  with your browser's login cookies — the skill does not do this
+  automatically. Public promotional reels usually work without login.
 - `empty media response` error → `brew upgrade yt-dlp` (Instagram extractors
   break often on old versions).
-- Optional narration transcription reuses `GROQ_API_KEY` / `OPENAI_API_KEY`
-  from `~/.config/watch/.env` (shared with the `watch` skill). No key → skipped.
-- Video and frames stay in a local tmp dir. Nothing is uploaded (except the
-  audio clip to your Whisper provider, only when transcription is enabled).
+- Narration transcription is **off unless you pass `--audio`**, and even then
+  it only runs if a Whisper key is configured — reuses `GROQ_API_KEY` /
+  `OPENAI_API_KEY` from `~/.config/watch/.env` (shared with the `watch`
+  skill). No `--audio`, or no key → zero audio extraction, zero upload.
+- Video and frames stay in a local workspace. Nothing is uploaded except the
+  audio clip to your Whisper provider, and only when `--audio` is passed and
+  a Whisper key is configured.
 
 ## Developer (standalone skill install)
 
@@ -143,14 +149,14 @@ preflight가 자동 감지해 macOS면 Homebrew로 자동 설치하고, Linux/Wi
 실전 예: 19초 드론 릴스 하나로 강릉 사천진해변을 주소·지도 링크까지 확정
 (아치교·노란 등대·해루질 바위 단서 교차 대조).
 
-#### 정확도 기능 (v0.3.0)
+#### 정확도 기능
 
 - **댓글 지명 필터** — 국내·해외 지명 패턴을 매칭해 위치 유출 댓글을 좋아요순으로
   표시. 인기 릴스엔 장소를 흘린 사람이 거의 항상 있다.
 - **국내/해외 분기** — 지역 판별 휴리스틱 표(물색, 전화 지역번호, 주행 방향, 외국어
   간판)로 검색 전에 권역을 좁힌다.
-- **나레이션 전사** — Whisper 키가 있으면 기본 켜짐. 자막에 없는 정보가 나레이션에
-  있는 경우가 많다.
+- **나레이션 전사** (opt-in) — `--audio`를 명시하고 Whisper 키가 있을 때만 오디오를
+  추출·전사한다(기본 꺼짐). 자막에 없는 정보가 나레이션에 있는 경우가 많다.
 - **줌 재추출** (`--start`/`--end` + `--resolution 2048`) — 작은 간판 판독용으로
   특정 구간만 고해상 재추출(이미 받은 영상 재사용, 재다운로드 없음).
 - **프로필 스캔** (`--profile-scan N`) — 업로더 최근 게시물 location 태그를 지역
@@ -158,15 +164,18 @@ preflight가 자동 감지해 macOS면 Homebrew로 자동 설치하고, Linux/Wi
 
 ### 참고
 
-- Instagram이 비로그인 접근을 막으면 브라우저 쿠키로 자동 재시도
-  (`--cookies-browser`, 기본 chrome). Chrome에 인스타 로그인만 되어 있으면 된다.
-  공개 홍보 릴스는 대개 로그인 없이 된다.
+- 기본은 **익명 다운로드**(`--cookies-browser none`). Instagram이 비로그인
+  접근을 막으면(로그인 벽) `--cookies-browser chrome`(또는 safari/firefox/
+  edge/brave)로 재실행해 브라우저 로그인 쿠키로 재시도한다 — 자동 재시도는
+  하지 않는다. 공개 홍보 릴스는 대개 로그인 없이 된다.
 - "empty media response" 에러 → `brew upgrade yt-dlp` (Instagram 추출기가
   구버전에서 자주 깨짐).
-- 나레이션 전사는 `~/.config/watch/.env`의 `GROQ_API_KEY`/`OPENAI_API_KEY`
-  재사용(watch 스킬과 공유). 키 없으면 생략.
-- 영상·프레임은 로컬 tmp에만 저장. 외부 업로드 없음(전사 켠 경우 오디오 클립만
-  Whisper 제공사로 전송).
+- 나레이션 전사는 **`--audio`를 명시했을 때만** 시도하며, 그중에서도 Whisper
+  키가 있을 때만 동작한다 — `~/.config/watch/.env`의 `GROQ_API_KEY`/
+  `OPENAI_API_KEY` 재사용(watch 스킬과 공유). `--audio` 없거나 키 없으면
+  오디오 추출·업로드가 아예 없다.
+- 영상·프레임은 로컬 작업공간에만 저장. 외부 업로드 없음(`--audio`로 전사를
+  켜고 Whisper 키가 있는 경우에만 오디오 클립을 Whisper 제공사로 전송).
 
 ### 개발자용 (단독 스킬 설치)
 
