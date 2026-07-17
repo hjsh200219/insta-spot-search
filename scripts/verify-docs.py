@@ -40,27 +40,29 @@ SELF = Path(__file__).resolve()
 # Paths that AGENTS.md / ARCHITECTURE.md promise exist.
 REQUIRED_PATHS = [SETUP, INGEST, SKILL]
 
-# Python files whose imports must stay stdlib-only.
-STDLIB_ONLY_FILES = [INGEST, SETUP]
+# Python files whose imports must stay stdlib-only. lookup.py is scanned too now
+# that it imports the shared _common module (its import is allowlisted below).
+STDLIB_ONLY_FILES = [INGEST, SETUP, LOOKUP]
 
 # The two independent CLI entrypoints — importing one from the other violates the
 # "independent entrypoints" invariant (layer-rules §1), so their bare module names
 # must NOT appear as imports.
 ENTRYPOINT_MODULES = {"setup", "ingest"}
 
-# Genuinely stdlib-only shared modules that both entrypoints may import (layer-rules
-# §1: shared code goes into a NEW module both import, never one entrypoint importing
-# the other). Empty today. Add a name here ONLY when such a module is introduced.
-LOCAL_SHARED_MODULES: set[str] = set()
+# Genuinely stdlib-only shared modules that entrypoints may import (layer-rules §1:
+# shared code goes into a NEW module the entrypoints import, never one entrypoint
+# importing another). `_common` is scripts/_common.py — a LOCAL sibling module, not
+# a third-party dep — so `import _common` / `from _common import ...` is permitted.
+LOCAL_SHARED_MODULES: set[str] = {"_common"}
 
 # Fallback stdlib allowlist for Python < 3.10 (no sys.stdlib_module_names). Covers
 # the modules these scripts actually use plus common stdlib, kept intentionally small.
 _STDLIB_FALLBACK = {
     "__future__", "argparse", "ast", "collections", "contextlib", "csv",
-    "datetime", "functools", "glob", "hashlib", "io", "itertools", "json",
-    "math", "os", "pathlib", "platform", "random", "re", "shlex", "shutil",
-    "subprocess", "sys", "tempfile", "textwrap", "time", "typing", "unittest",
-    "urllib", "uuid",
+    "dataclasses", "datetime", "functools", "glob", "hashlib", "io", "ipaddress",
+    "itertools", "json", "math", "os", "pathlib", "platform", "random", "re",
+    "shlex", "shutil", "socket", "subprocess", "sys", "tempfile", "textwrap",
+    "time", "typing", "unittest", "urllib", "uuid",
 }
 
 # ingest.py exit-code contract (must match SKILL.md "Failure modes" + ARCHITECTURE).

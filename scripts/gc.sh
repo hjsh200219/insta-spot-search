@@ -23,6 +23,7 @@ cd "$REPO_ROOT"
 INGEST="skills/insta-spot-search/scripts/ingest.py"
 LOOKUP="skills/insta-spot-search/scripts/lookup.py"
 SETUP="skills/insta-spot-search/scripts/setup.py"
+COMMON="skills/insta-spot-search/scripts/_common.py"
 VERIFY="scripts/verify-docs.py"
 LOG="docs/harness/gc-script-log.md"
 
@@ -37,7 +38,7 @@ echo "=================================================="
 # ---- [1] syntax / "build": py_compile ----------------------------------------
 echo
 echo "[1/6] syntax check (py_compile)"
-PY_TARGETS=("$INGEST" "$LOOKUP" "$SETUP" "$VERIFY")
+PY_TARGETS=("$INGEST" "$LOOKUP" "$SETUP" "$COMMON" "$VERIFY")
 if [ -d tests ]; then
   while IFS= read -r f; do PY_TARGETS+=("$f"); done < <(find tests -name '*.py' | sort)
 fi
@@ -84,7 +85,7 @@ fi
 echo
 echo "[4/6] lint (ruff, optional)"
 if command -v ruff >/dev/null 2>&1; then
-  if ruff check "$INGEST" "$LOOKUP" "$SETUP" "$VERIFY" tests; then
+  if ruff check "$INGEST" "$LOOKUP" "$SETUP" "$COMMON" "$VERIFY" tests; then
     echo "  PASS — ruff clean"
     record "PASS  ruff"
   else

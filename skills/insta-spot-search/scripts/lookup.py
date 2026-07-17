@@ -27,6 +27,11 @@ import urllib.error
 import urllib.parse
 import urllib.request
 
+# _common is a LOCAL sibling module (scripts/_common.py), not a third-party dep.
+# Ensure our own dir is importable so `python3 .../lookup.py` works from any cwd.
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+from _common import PathEscape, die, resolve_within  # noqa: E402
+
 TIMEOUT = 15  # seconds, applied to every request
 MAX_IMAGE_BYTES = 15 * 1024 * 1024  # 15 MB cap on downloaded image body
 USER_AGENT = "insta-spot-search-skill"
@@ -44,11 +49,6 @@ class _AddressError(Exception):
 
 class _ResolveError(Exception):
     """Host could not be resolved to any IP; mapped to exit 4."""
-
-
-def die(code, msg):
-    print(f"ERROR: {msg}", file=sys.stderr)
-    sys.exit(code)
 
 
 def _reject_if_internal(url):
@@ -151,16 +151,19 @@ def _safe_name(name):
 
 
 def _resolve_dest(out_dir, name):
-    """makedirs out_dir, return the resolved dest path, dying if it escapes."""
+    """makedirs out_dir, return the resolved dest path, dying if it escapes.
+
+    Containment is delegated to the shared _common.resolve_within (item f); the
+    single-component `name` is still pre-validated by _safe_name before we get
+    here, so this only guards the join. Escapes map to exit 2 as before."""
     try:
         os.makedirs(out_dir, exist_ok=True)
     except OSError as e:
         die(2, f"cannot use --out-dir: {e}")
-    root = os.path.realpath(out_dir)
-    dest = os.path.realpath(os.path.join(root, name))
-    if os.path.commonpath([root, dest]) != root:
+    try:
+        return resolve_within(out_dir, name)
+    except PathEscape:
         die(2, "output path escapes --out-dir")
-    return dest
 
 
 def _read_capped(resp):

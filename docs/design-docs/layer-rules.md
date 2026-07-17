@@ -25,18 +25,27 @@ SKILL.md를 알지 못한다.
   호출이 아님)로만 일어난다. `lookup.py`는 그 파일시스템 결합에도 참여하지 않는
   순수 조회/다운로드 어댑터로, 결과를 stdout(JSON) 또는 저장 파일로만 돌려준다.
 
-### 공유 코드를 추출할 때의 규칙 (방향 강제)
+### 공유 코드를 추출할 때의 규칙 (방향 강제) — `_common.py` 예외
 
-지금은 `setup.py:_check_binaries()`와 `ingest.py:check_binaries()`가 각자 구현이다
-(의도된 중복 — [tech-debt-tracker](../exec-plans/tech-debt-tracker.md) 참고). 이걸
-공통화하고 싶다면:
+`skills/insta-spot-search/scripts/_common.py`가 이미 존재하는 **승인된 공유 헬퍼
+모듈**이다. `die()`/`REQUIRED_BINARIES`+`missing_binaries()`/`cookie_retry_attempts()`/
+`PathEscape`+`resolve_within()`을 담고 있으며, `if __name__ == "__main__"`이 없어
+**CLI가 아니다**. `setup.py`·`ingest.py`·`lookup.py` 세 진입점이 각자
+`sys.path.insert(0, <자기 dir>)` 후 `from _common import ...`로 **로컬 import**한다.
 
-- **반드시** 새 공유 모듈(예: `skills/insta-spot-search/scripts/_common.py`)을 만들고
-  **두 스크립트가 그 모듈을 import**한다.
+이것이 §1 "서로 import하지 않는다" 규칙의 **유일한 예외**다 — 정확히는 예외가 아니라
+그 규칙이 애초에 허용하는 경로: 진입점은 **서로**를 import하지 않을 뿐, 셋이 공통으로
+**공유 헬퍼 모듈**을 import하는 것은 금지 대상이 아니다. 새로 공통화하고 싶은 로직이
+있다면:
+
+- **반드시** 기존 `_common.py`에 추가하거나(새로 작은 헬퍼라면), 그래도 별도 모듈이
+  필요하면 새 공유 모듈을 만들고 **필요한 진입점들이 그 모듈을 import**한다.
 - **금지**: 한 진입점을 "라이브러리 겸 CLI"로 만들어 다른 진입점이 그것을 import하는 것.
   진입점끼리는 영원히 동등한 형제(sibling)여야 한다. 한쪽이 다른 쪽에 의존하면
   독립 CLI 불변식이 깨지고, `--check` 같은 경량 preflight가 무거운 파이프라인 코드를
   끌고 들어온다.
+- `_common.py` 자체도 이 규칙을 지킨다: `setup.py`/`ingest.py`/`lookup.py`를 import하지
+  않는다(공유 모듈이 진입점에 의존하면 방향이 뒤집힌다).
 
 ```
         SKILL.md  (오케스트레이터 / SSOT)
@@ -45,11 +54,15 @@ SKILL.md를 알지 못한다.
         ├──────────────► ingest.py  (추출 파이프라인, 독립)
         └──────────────► lookup.py  (지오코딩/이미지 다운로드 어댑터, 독립)
 
-  공통화 시 (허용):                     공통화 시 (금지):
+  허용 (지금 상태):                       금지 (어느 조합이든):
         setup.py ──┐                      setup.py ──import──► ingest.py
-       ingest.py ──┼─import─► _common.py       (진입점이 진입점을 import,
-       lookup.py ──┘                            어느 조합이든 금지)
+       ingest.py ──┼─import─► _common.py       (진입점이 진입점을 import)
+       lookup.py ──┘                      _common.py ──import──► ingest.py
+                                                (공유 헬퍼가 진입점에 의존)
 ```
+
+소스 파일은 이제 4개다(`setup.py`·`ingest.py`·`lookup.py`·`_common.py`) — 그중
+독립 CLI 진입점은 여전히 3개뿐이고 `_common.py`는 진입점이 아니다.
 
 ---
 
@@ -76,11 +89,13 @@ Setup(check_binaries) → Download(download) → Frame(probe_duration→extract_
 
 ## 3. stdlib 전용 — pip 의존성 0 (하드 불변식)
 
-`ingest.py`·`setup.py`·`lookup.py`는 파이썬 **표준 라이브러리만** import한다. 현재 사용
-모듈: `argparse` `glob` `json` `os` `re` `shutil` `subprocess` `sys` `tempfile`
-(`ingest.py`), `json` `platform` `shutil` `subprocess` `sys` `pathlib`
+`ingest.py`·`setup.py`·`lookup.py`·`_common.py`는 파이썬 **표준 라이브러리만**
+import한다(`_common.py`는 셋이 로컬 import하는 대상이므로 stdlib-only 불변식이 그대로
+전파돼야 한다). 현재 사용 모듈: `argparse` `glob` `json` `os` `re` `shutil` `subprocess`
+`sys` `tempfile` (`ingest.py`), `json` `platform` `shutil` `subprocess` `sys` `pathlib`
 (`setup.py`), `argparse` `ipaddress` `json` `os` `socket` `sys` `urllib.*`
-(`lookup.py`), 그리고 `from __future__ import annotations`.
+(`lookup.py`), `os` `shutil` `sys` `typing`(`_common.py`), 그리고
+`from __future__ import annotations`.
 
 - **금지**: 어떤 서드파티 패키지든 `import`/`from ... import` 하는 것.
 - **금지**: `requirements.txt` / `pyproject.toml` / `setup.cfg` 등 의존성 매니페스트를
@@ -110,13 +125,14 @@ Setup(check_binaries) → Download(download) → Frame(probe_duration→extract_
 
 | 규칙 | verify-docs.py가 검사하는가 | 검사 방식 |
 |------|:--:|-----------|
-| §3 stdlib 전용 | ✅ | `ingest.py`/`setup.py`의 모든 import를 stdlib allowlist와 대조, 서드파티 발견 시 FAIL |
+| §3 stdlib 전용 | ✅ | `ingest.py`/`setup.py`/`lookup.py`(`STDLIB_ONLY_FILES`) 세 파일 전부의 모든 import를 stdlib allowlist와 대조. `_common`은 `LOCAL_SHARED_MODULES`로 명시 허용(서드파티 아님), 그 외 서드파티 발견 시 FAIL |
 | exit code 계약 | ✅ | `ingest.py`가 문서화된 코드 `2/3/4/5`를, `lookup.py`가 `2/4`를 여전히 참조하는지 확인(이 체크가 `lookup.py` 파일 존재 여부도 함께 확인) |
 | 문서 경로 실재 | ✅ | AGENTS.md/ARCHITECTURE.md가 가리키는 `setup.py`/`ingest.py`/`SKILL.md` 존재 확인. `lookup.py`는 이 체크 대상이 아니고 위 exit-code 체크가 대신 존재를 확인 |
-| §1 진입점 상호 import 금지 | ⚠️ 부분 | stdlib 스캔이 `ingest.py`/`setup.py` 안의 `import setup`/`import ingest`(로컬 모듈)를 서드파티로 잡아 간접 방어. **갭**: 이 스캔은 `lookup.py`를 대상에 포함하지 않아 `lookup.py`가 `import ingest`/`import setup` 하는 경우는 잡지 못한다 |
+| §1 진입점 상호 import 금지 | ✅ | stdlib 스캔이 `ingest.py`/`setup.py`/`lookup.py` **세 파일 모두**를 훑어 `import setup`/`import ingest`(`ENTRYPOINT_MODULES`)가 어디서 나타나든 잡는다 — `lookup.py`가 `import ingest`/`import setup` 하는 경우도 이제 이 스캔 범위 안이다(예전엔 `lookup.py`가 스캔 대상이 아니라 갭이었으나 `_common` 도입과 함께 `STDLIB_ONLY_FILES`에 추가되며 해소됨) |
 | §2 파이프라인 방향 | ❌ | 한 파일 내부 흐름이라 정적 검사 대상 아님 — 코드 리뷰로 지킴 |
 
 - 실행: `python3 scripts/verify-docs.py` (수동 / harness-gc 흐름). 자세한 게이트는
   [harness-setup.md](../harness/harness-setup.md) 品質 게이트 절 참고.
-- import-linter/eslint류를 새로 도입하지 않는다 — 소스 3파일 리포에 무거운 린터를
-  얹는 것은 [harness principles](../harness/principles.md)의 "하네스 단순화 원칙" 위반이다.
+- import-linter/eslint류를 새로 도입하지 않는다 — 소스 4파일(CLI 진입점 3개 + 공유 헬퍼
+  `_common.py` 1개) 리포에 무거운 린터를 얹는 것은
+  [harness principles](../harness/principles.md)의 "하네스 단순화 원칙" 위반이다.

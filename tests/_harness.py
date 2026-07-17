@@ -33,6 +33,12 @@ def load_module(name, path):
     return mod
 
 
+# The entrypoints do `import _common` (a LOCAL sibling module). Put the scripts
+# dir on sys.path before loading them so that import resolves during test loads
+# (each script also self-bootstraps this, but do it here up front too).
+if str(SCRIPTS) not in sys.path:
+    sys.path.insert(0, str(SCRIPTS))
+
 # Loaded once for the whole suite. Distinct names avoid clashing with the
 # characterization tests that load the same files under other names.
 ingest = load_module("iss_ingest_contract", INGEST_PY)

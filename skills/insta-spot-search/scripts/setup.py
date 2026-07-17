@@ -30,15 +30,14 @@ import subprocess
 import sys
 from pathlib import Path
 
-REQUIRED_BINARIES = ["yt-dlp", "ffmpeg", "ffprobe"]
+# _common is a LOCAL sibling module (scripts/_common.py), not a third-party dep.
+# Ensure our own dir is importable so `python3 .../setup.py` works from any cwd.
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from _common import REQUIRED_BINARIES, missing_binaries  # noqa: E402
 
 
 def _which(name: str) -> str | None:
     return shutil.which(name)
-
-
-def _check_binaries() -> list[str]:
-    return [b for b in REQUIRED_BINARIES if not _which(b)]
 
 
 def _brew_pkgs(missing: list[str]) -> list[str]:
@@ -99,7 +98,7 @@ def _hint_windows(missing: list[str]) -> str:
 
 
 def _status() -> dict:
-    missing = _check_binaries()
+    missing = missing_binaries(REQUIRED_BINARIES)
     return {
         "status": "ready" if not missing else "needs_install",
         "missing_binaries": missing,
@@ -127,7 +126,7 @@ def cmd_json() -> int:
 
 
 def cmd_install(auto_yes: bool = False) -> int:
-    missing = _check_binaries()
+    missing = missing_binaries(REQUIRED_BINARIES)
     if not missing:
         print("[setup] all dependencies present (yt-dlp, ffmpeg, ffprobe). ready.")
         return 0
@@ -138,7 +137,7 @@ def cmd_install(auto_yes: bool = False) -> int:
         print(f"[setup] {msg}", file=sys.stderr)
         if not ok:
             return 2
-        still = _check_binaries()
+        still = missing_binaries(REQUIRED_BINARIES)
         if still:
             print(f"[setup] still missing after install: {', '.join(still)}", file=sys.stderr)
             return 2

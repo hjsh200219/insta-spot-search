@@ -1,6 +1,7 @@
 # QUALITY — insta-spot-search
 
-이 리포는 소스 4파일(`setup.py`·`ingest.py`·`lookup.py`·`SKILL.md`)의 소규모
+이 리포는 소스 5파일(독립 CLI 진입점 `setup.py`·`ingest.py`·`lookup.py`, 셋이
+로컬 import하는 공유 헬퍼 `_common.py`, 오케스트레이터 `SKILL.md`)의 소규모
 스킬이다. 품질 게이트도 그에 맞춰 **가볍게, 그러나 실재하는 계약을 검증**하는
 데 집중한다.
 
@@ -20,12 +21,12 @@ python3 skills/insta-spot-search/scripts/setup.py --json     # 기대: {"status"
 
 `tests/`에 7개 테스트 파일 + 공유 헬퍼 `tests/_harness.py`가 있다. 정확한 케이스
 수는 `python3 -m unittest discover -s tests`로 직접 확인 — 이 문서 기준
-**144 케이스, 전부 통과**. R1~R9 완료 조건마다 최소 1개 회귀 테스트가 매핑된다.
+**175 케이스, 전부 통과**. R1~R9 완료 조건마다 최소 1개 회귀 테스트가 매핑된다.
 
 | 파일 | 커버 | R-매핑 |
 |------|------|--------|
 | `test_ingest.py` | `parse_ts`, `positive_int`/`positive_float`/`nonneg_int`(경계값 0/음수), `load_env_file`, `fmt_ts`, `LOGIN_WALL_PAT`/`COOKIE_ERR_PAT`/`PLACE_WORD_PAT`/`REGION_PAT`/`OVERSEAS_PAT` | 순수 함수 회귀 |
-| `test_setup.py` | `_brew_pkgs`(중복 축약·순서 보존·빈 입력), `_status()` shape | 순수 함수 회귀 |
+| `test_setup.py` | `_brew_pkgs`(중복 축약·순서 보존·빈 입력), `_status()` shape + **동의 게이트**(TTY 승인/거부/EOF, non-TTY 거부, `--yes` 스킵)·**brew 설치 분기**(brew 없음/성공/실패/argv 조립)·**플랫폼 힌트**(Linux/Windows)·`cmd_check`/`cmd_json`/`cmd_install`/`main()` 디스패치를 전부 `unittest.mock.patch`로 목킹(39개 테스트, `setup.py` 실측 커버리지 28%→**99%**) | 순수 함수 회귀 + 설치/동의 게이트 회귀 |
 | `test_skill_paths.py` | SKILL.md의 두 줄 리졸버를 **실제 `zsh -c`/`sh -c` 서브프로세스**로 실행해 `$SKILL_DIR`가 격리 셸에서도 올바르게 해석되는지(공백·대괄호 포함 경로, `CLAUDE_SKILL_DIR` 폴백 포함) + 모든 bash 블록이 `$SKILL_DIR` 재정의를 갖는지 정적 검사 | **R1** |
 | `test_cleanup.py` | `cleanup()` 해피패스(매니페스트 파일만 삭제, 비목록 파일 보존) + 거부 케이스(빈 경로, 존재하지 않는 dir, 매니페스트 없음/`owned:false`, `created` 리스트 malformed, 파일시스템 루트, 홈 디렉터리, 저장소 루트, 워크스페이스 이스케이프, 절대경로 항목, 심링크 경계) | **R2** |
 | `test_lookup.py` | HTTPS 전용 스킴 검사, 리다이렉트 스킴 거부(`HttpsOnlyRedirectHandler`), 경로 이스케이프/절대경로/`..`/구분자 포함 파일명 거부, `--out-dir` 내부 confinement, 비-image Content-Type 거부, 크기 상한 초과 거부(쓰기 전에 실패), 성공 케이스, `User-Agent` 전송, 선행 `-`/셸 메타문자/개행이 URL 값으로만 들어가는 인젝션 방어, Kakao/Nominatim HTTPS+베이스URL | **R3** |
@@ -39,7 +40,7 @@ discover 대상이 아닌 공유 헬퍼로, `ingest.py`의 `subprocess.run`/`url
 구동한다.
 
 ```bash
-python3 -m unittest discover -s tests -p 'test_*.py'   # 기대: Ran 144 tests ... OK
+python3 -m unittest discover -s tests -p 'test_*.py'   # 기대: Ran 175 tests ... OK
 ```
 
 - 잔여 갭: URL 다운로드/프레임/전사의 **실 네트워크·실 바이너리 종단(e2e)**은
@@ -55,7 +56,9 @@ python3 scripts/verify-docs.py   # 기대: RESULT: PASS, exit 0
 7개 체크를 수행한다:
 
 1. `setup.py`/`ingest.py`/`SKILL.md` 경로 존재
-2. `ingest.py`/`setup.py`의 import가 stdlib뿐인지(서드파티·상호 entrypoint import 금지)
+2. `ingest.py`/`setup.py`/`lookup.py` 세 파일 전부의 import가 stdlib뿐인지(서드파티·상호
+   entrypoint import 금지). `_common`은 세 진입점이 로컬 import하는 공유 헬퍼로 명시
+   허용(서드파티 아님)
 3. `ingest.py`가 `die()`/`sys.exit()`로 exit code `2`/`3`/`4`/`5`를, `lookup.py`가 `2`/`4`를 여전히 참조하는지(exit 0은 `lookup.py` 독스트링에 "0 ok" 문구가 있는지로 확인) — 텍스트/AST 매칭이며 실제 분기 도달 여부까지 검증하진 않는다
 4. `AGENTS.md`/`ARCHITECTURE.md`/`README.md`/`SKILL.md`/`docs/**/*.md`의 저장소 내부 상대링크가 실제로 존재하는 파일을 가리키는지(코드 펜스 내부는 제외)
 5. `scripts/*.py` + `skills/**/*.py` 전체에 `shell=True` 패턴이 없는지
@@ -74,6 +77,8 @@ grep -REn "^\s*(import|from) " skills/insta-spot-search/scripts/
 
 - 서드파티 import가 등장하면 **즉시 실패**로 간주한다(stdlib 전용은 하드 불변식).
   `lookup.py`도 `argparse`/`json`/`os`/`sys`/`urllib.*`만 사용해 이 불변식을 지킨다.
+  공유 헬퍼 `_common.py`도 `os`/`shutil`/`sys`/`typing`만 사용하는 stdlib-only 모듈이다
+  (진입점 3개가 로컬 import하는 대상이므로 이 불변식이 그대로 전파돼야 한다).
 - `pyproject.toml`/`requirements.txt`/`setup.cfg` 같은 의존성 매니페스트가 없어야 한다.
 
 ## 게이트 5 — 통합 하네스 게이트 (`scripts/gc.sh`)
@@ -84,7 +89,7 @@ Node 없는 저장소에 맞춘 `gc.sh` 6단계 통합 게이트:
 bash scripts/gc.sh
 ```
 
-1. **syntax** — `python3 -m py_compile`로 `ingest.py`/`lookup.py`/`setup.py`/`verify-docs.py`/`tests/*.py` 컴파일 확인(필수, 실패 시 HARD FAIL)
+1. **syntax** — `python3 -m py_compile`로 `ingest.py`/`lookup.py`/`setup.py`/`_common.py`/`verify-docs.py`/`tests/*.py` 컴파일 확인(필수, 실패 시 HARD FAIL)
 2. **docs verify** — `python3 scripts/verify-docs.py`(위 게이트 3, 필수)
 3. **preflight** — `setup.py --check`(바이너리 부재는 WARN — 리포 품질 실패 아님, 스크립트 자체 오류만 FAIL)
 4. **lint(optional)** — `ruff`가 설치돼 있으면 실행, 없으면 SKIP
@@ -93,8 +98,8 @@ bash scripts/gc.sh
 
 필수 단계(1/2/5) 중 하나라도 실패하면 전체 exit 1. 실행 결과는
 `docs/harness/gc-script-log.md`에 append된다. 1단계 `PY_TARGETS`는
-`INGEST`/`LOOKUP`/`SETUP`/`VERIFY` + `tests/*.py`를 모두 포함하므로
-`lookup.py`의 문법 오류도 gc.sh 1단계가 직접 잡는다.
+`INGEST`/`LOOKUP`/`SETUP`/`COMMON`/`VERIFY` + `tests/*.py`를 모두 포함하므로
+`lookup.py`/`_common.py`의 문법 오류도 gc.sh 1단계가 직접 잡는다.
 
 ## 게이트 6 — 수동 스모크 (샘플 URL/로컬 영상)
 
