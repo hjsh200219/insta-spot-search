@@ -379,5 +379,41 @@ class TestR9CommentsConstruction(_IngestCase):
         self.assertNotIn("--no-write-comments", cmd)
 
 
+# ---------------------------------------------------------------------------
+# usage-error precedence + --profile-scan platform gate
+# ---------------------------------------------------------------------------
+class TestArgValidationAndProfileGate(_IngestCase):
+    def test_end_before_start_is_usage_error_before_any_download(self):
+        # statically detectable → exit 2 BEFORE yt-dlp runs (was: full download
+        # then exit 5 from extract_frames)
+        fake = FakeProc()
+        code, _stdout, _err = run_ingest(
+            [URL, "--out-dir", self.fresh_out(), "--start", "10", "--end", "5"], fake)
+        self.assertEqual(code, 2)
+        self.assertEqual(fake.calls, [])  # nothing downloaded or probed
+
+    def test_profile_scan_skipped_for_non_instagram_source(self):
+        fake = FakeProc(info={"channel": "someone", "extractor_key": "TikTok"})
+        out = self.fresh_out()
+        code, _stdout, err = run_ingest(
+            ["https://www.tiktok.com/@someone/video/1", "--out-dir", out,
+             "--profile-scan", "3"], fake)
+        self.assertEqual(code, 0)
+        self.assertEqual(read_report(out)["profile_posts"], [])
+        self.assertIn("Instagram sources only", err)
+        self.assertFalse(any("-J" in c for c in fake.calls))  # no profile fetch ran
+
+    def test_profile_scan_handle_is_percent_encoded(self):
+        # handle comes from untrusted metadata — '/' and '?' must stay one path segment
+        fake = FakeProc(info={"channel": "we?ird/handle", "extractor_key": "Instagram"},
+                        profile_stdout='{"entries": []}')
+        code, _stdout, _err = run_ingest(
+            [URL, "--out-dir", self.fresh_out(), "--profile-scan", "3"], fake)
+        self.assertEqual(code, 0)
+        scans = [c for c in fake.calls if "-J" in c]
+        self.assertEqual(len(scans), 1)
+        self.assertIn("https://www.instagram.com/we%3Fird%2Fhandle/", scans[0])
+
+
 if __name__ == "__main__":
     unittest.main()

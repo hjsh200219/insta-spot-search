@@ -314,15 +314,15 @@ class TestCmdInstall(unittest.TestCase):
     hints, never installing)."""
 
     def test_cmd_install_all_present(self):
-        out = io.StringIO()
+        err = io.StringIO()
         with contextlib.ExitStack() as stack:
             stack.enter_context(mock.patch.object(setup, "missing_binaries", return_value=[]))
             run_mock = stack.enter_context(mock.patch.object(setup.subprocess, "run"))
-            stack.enter_context(contextlib.redirect_stdout(out))
+            stack.enter_context(contextlib.redirect_stderr(err))
             code = setup.cmd_install()
         self.assertEqual(code, 0)
-        self.assertIn("all dependencies present", out.getvalue())
-        self.assertIn("ready", out.getvalue())
+        self.assertIn("all dependencies present", err.getvalue())
+        self.assertIn("ready", err.getvalue())
         run_mock.assert_not_called()
 
     def test_cmd_install_darwin_dispatches_to_install_macos(self):
@@ -339,7 +339,7 @@ class TestCmdInstall(unittest.TestCase):
             code = setup.cmd_install(auto_yes=True)
         self.assertEqual(code, 0)
         install_mock.assert_called_once_with(["ffmpeg"], True)
-        self.assertIn("ready. insta-spot-search is fully set up.", out.getvalue())
+        self.assertIn("ready. insta-spot-search is fully set up.", err.getvalue())
 
     def test_cmd_install_darwin_still_missing_after_install(self):
         err = io.StringIO()
@@ -458,6 +458,31 @@ class TestMainDispatch(unittest.TestCase):
             stack.enter_context(mock.patch.object(setup, "cmd_check", return_value=2))
             code = setup.main()
         self.assertEqual(code, 2)
+
+    def test_main_unknown_flag_is_usage_error_never_installs(self):
+        # A typo of --check must NOT fall through into installer mode.
+        err = io.StringIO()
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.object(sys, "argv", ["setup.py", "--chekc"]))
+            install_mock = stack.enter_context(
+                mock.patch.object(setup, "cmd_install", return_value=0))
+            stack.enter_context(contextlib.redirect_stderr(err))
+            with self.assertRaises(SystemExit) as cm:
+                setup.main()
+        self.assertEqual(cm.exception.code, 2)
+        install_mock.assert_not_called()
+
+    def test_main_help_exits_0_never_installs(self):
+        out = io.StringIO()
+        with contextlib.ExitStack() as stack:
+            stack.enter_context(mock.patch.object(sys, "argv", ["setup.py", "--help"]))
+            install_mock = stack.enter_context(
+                mock.patch.object(setup, "cmd_install", return_value=0))
+            stack.enter_context(contextlib.redirect_stdout(out))
+            with self.assertRaises(SystemExit) as cm:
+                setup.main()
+        self.assertEqual(cm.exception.code, 0)
+        install_mock.assert_not_called()
 
 
 if __name__ == "__main__":

@@ -23,6 +23,7 @@ Design:
 """
 from __future__ import annotations
 
+import argparse
 import json
 import platform
 import shutil
@@ -128,7 +129,8 @@ def cmd_json() -> int:
 def cmd_install(auto_yes: bool = False) -> int:
     missing = missing_binaries(REQUIRED_BINARIES)
     if not missing:
-        print("[setup] all dependencies present (yt-dlp, ffmpeg, ffprobe). ready.")
+        print("[setup] all dependencies present (yt-dlp, ffmpeg, ffprobe). ready.",
+              file=sys.stderr)
         return 0
 
     system = platform.system()
@@ -141,7 +143,7 @@ def cmd_install(auto_yes: bool = False) -> int:
         if still:
             print(f"[setup] still missing after install: {', '.join(still)}", file=sys.stderr)
             return 2
-        print("[setup] ready. insta-spot-search is fully set up.")
+        print("[setup] ready. insta-spot-search is fully set up.", file=sys.stderr)
         return 0
 
     if system == "Linux":
@@ -159,12 +161,23 @@ def cmd_install(auto_yes: bool = False) -> int:
 
 
 def main() -> int:
-    if len(sys.argv) > 1:
-        if sys.argv[1] == "--check":
-            return cmd_check()
-        if sys.argv[1] == "--json":
-            return cmd_json()
-    return cmd_install(auto_yes="--yes" in sys.argv[1:])
+    # Strict argv contract: an unknown flag (e.g. a typo of --check) must be a
+    # usage error (exit 2), never a silent fall-through into installer mode.
+    ap = argparse.ArgumentParser(
+        description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    mode = ap.add_mutually_exclusive_group()
+    mode.add_argument("--check", action="store_true",
+                      help="silent preflight: exit 0 if ready, 2 if binaries missing")
+    mode.add_argument("--json", action="store_true",
+                      help="print machine-readable status and exit 0")
+    ap.add_argument("--yes", action="store_true",
+                    help="installer mode: consent to `brew install` without the [y/N] prompt")
+    args = ap.parse_args()
+    if args.check:
+        return cmd_check()
+    if args.json:
+        return cmd_json()
+    return cmd_install(auto_yes=args.yes)
 
 
 if __name__ == "__main__":

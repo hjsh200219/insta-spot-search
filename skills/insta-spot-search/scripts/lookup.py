@@ -34,7 +34,8 @@ from _common import PathEscape, die, resolve_within  # noqa: E402
 
 TIMEOUT = 15  # seconds, applied to every request
 MAX_IMAGE_BYTES = 15 * 1024 * 1024  # 15 MB cap on downloaded image body
-USER_AGENT = "insta-spot-search-skill"
+# Nominatim usage policy asks for an identifiable UA with a contact point.
+USER_AGENT = "insta-spot-search-skill (+https://github.com/hjsh200219/insta-spot-search)"
 KAKAO_DEFAULT_BASE = "https://k-skill-proxy.nomadamas.org"
 GEOCODE_CMDS = ("geocode-kakao", "geocode-nominatim")
 
@@ -56,9 +57,15 @@ def _reject_if_internal(url):
 
     Runs on the FIRST hop and on every redirect hop (see redirect_request) to
     block SSRF at internal targets — 127.0.0.1, ::1, 10.x/172.16.x/192.168.x,
-    and the cloud metadata endpoint 169.254.169.254 — whether reached directly
-    or via a redirect from an untrusted page (SKILL Step 4). fetch-image URLs
-    are attacker-influenced, so this is defense the geocode hosts also inherit.
+    the cloud metadata endpoint 169.254.169.254, and every other non-global
+    range (CGNAT 100.64/10, benchmark, doc prefixes, ...) — whether reached
+    directly or via a redirect from an untrusted page (SKILL Step 4).
+    fetch-image URLs are attacker-influenced, so this is defense the geocode
+    hosts also inherit.
+
+    `not is_global` subsumes the private/loopback/link-local/reserved/
+    unspecified flags; multicast is checked separately because global-scope
+    IPv6 multicast (e.g. ff0e::/16) still reports is_global=True.
 
     Inherent DNS-rebind gap: the name is resolved here for validation, then
     urllib resolves it again when it actually connects, so a hostile resolver
@@ -78,8 +85,7 @@ def _reject_if_internal(url):
             ip = ipaddress.ip_address(str(info[4][0]).split("%")[0])
         except ValueError:
             raise _AddressError(str(info[4][0]))  # unparseable → fail closed
-        if (ip.is_private or ip.is_loopback or ip.is_link_local
-                or ip.is_reserved or ip.is_multicast or ip.is_unspecified):
+        if ip.is_multicast or not ip.is_global:
             raise _AddressError(str(ip))
 
 

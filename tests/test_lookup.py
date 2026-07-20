@@ -42,6 +42,7 @@ PUBLIC_ADDRINFO = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("93.184.216.34",
 LOOPBACK_ADDRINFO = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("127.0.0.1", 0))]
 METADATA_ADDRINFO = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("169.254.169.254", 0))]
 PRIVATE_ADDRINFO = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("10.0.0.5", 0))]
+CGNAT_ADDRINFO = [(socket.AF_INET, socket.SOCK_STREAM, 6, "", ("100.64.0.1", 0))]
 
 
 def _json_opener():
@@ -262,6 +263,13 @@ class TestSsrfGuard(unittest.TestCase):
     def test_first_hop_private_rejected(self):
         code, _out, _err = self._fetch(PRIVATE_ADDRINFO)  # 10.0.0.5
         self.assertEqual(code, 2)
+
+    def test_first_hop_cgnat_shared_range_rejected(self):
+        # 100.64.0.0/10 is neither is_private nor is_global — the guard rejects
+        # every non-global range, not just RFC1918
+        code, _out, err = self._fetch(CGNAT_ADDRINFO)
+        self.assertEqual(code, 2)
+        self.assertIn("100.64.0.1", err)
 
     def test_first_hop_public_allowed(self):
         opener = FakeOpener(lambda req: FakeResp(JPEG_BODY, IMG_HEADERS))

@@ -30,7 +30,7 @@ python3 skills/insta-spot-search/scripts/lookup.py fetch-image "<url>" --out-dir
 
 # 품질 게이트 / 테스트 / 문서 검증
 bash scripts/gc.sh                                      # 통합 게이트: py_compile→verify-docs→preflight→(ruff)→unittest→(coverage)
-python3 -m unittest discover -s tests -p 'test_*.py'   # stdlib 회귀 테스트(144, 의존성 0)
+python3 -m unittest discover -s tests -p 'test_*.py'   # stdlib 회귀 테스트(의존성 0)
 python3 scripts/verify-docs.py                          # 문서-코드 정합(7체크, exit 0=PASS)
 git config core.hooksPath .githooks                     # pre-commit 훅 활성화(우회: --no-verify)
 ```

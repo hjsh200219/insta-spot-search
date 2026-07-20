@@ -211,6 +211,12 @@ class TestFmtTs(unittest.TestCase):
         self.assertEqual(ingest.fmt_ts(90), "01:30")
         self.assertEqual(ingest.fmt_ts(0), "00:00")
 
+    def test_hour_plus_switches_to_h_mm_ss(self):
+        # long local videos: H:MM:SS instead of a wrapped "75:30"-style MM:SS
+        self.assertEqual(ingest.fmt_ts(3661), "1:01:01")
+        self.assertEqual(ingest.fmt_ts(3599), "59:59")
+        self.assertEqual(ingest.parse_ts(ingest.fmt_ts(4530)), 4530.0)
+
 
 if __name__ == "__main__":
     unittest.main()

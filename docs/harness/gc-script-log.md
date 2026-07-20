@@ -110,3 +110,11 @@
 - SKIP  ruff (not installed)
 - PASS  unittest
 - PASS  coverage
+
+## 2026-07-20 13:23:30 +0900 — PASS
+- PASS  syntax (py_compile, 14 files)
+- PASS  docs verify
+- PASS  preflight (binaries present)
+- SKIP  ruff (not installed)
+- PASS  unittest
+- PASS  coverage

@@ -31,6 +31,7 @@ import subprocess
 import sys
 import tempfile
 import urllib.error
+import urllib.parse
 import urllib.request
 import uuid
 from dataclasses import dataclass
@@ -107,7 +108,8 @@ def run_step(cmd: list[str], timeout: float, timeout_code: int,
 
 def fmt_ts(seconds: float) -> str:
     m, s = divmod(int(round(seconds)), 60)
-    return f"{m:02d}:{s:02d}"
+    h, m = divmod(m, 60)
+    return f"{h:d}:{m:02d}:{s:02d}" if h else f"{m:02d}:{s:02d}"
 
 
 def parse_ts(v: str) -> float:
@@ -481,8 +483,10 @@ def transcribe(audio_path: str, backend: "tuple[str, str, str]") -> "str | None"
 
 def scan_profile(handle: str, n: int, cookies_browser: str) -> "list[dict]":
     """Fetch metadata of the uploader's N most recent posts — location tags on
-    sibling posts are a strong region prior. Best-effort: returns [] on any failure."""
-    url = f"https://www.instagram.com/{handle}/"
+    sibling posts are a strong region prior. Best-effort: returns [] on any failure.
+    The handle comes from untrusted yt-dlp metadata, so it is percent-encoded —
+    a handle containing '/' or '?' stays a single path segment, never URL structure."""
+    url = f"https://www.instagram.com/{urllib.parse.quote(str(handle), safe='')}/"
     base = ["yt-dlp", "--no-update", "-J", "--playlist-items", f"1:{n}", url]
     try:
         r = run(base, PROFILE_TIMEOUT)
@@ -631,7 +635,8 @@ def _parse_args() -> argparse.Namespace:
     ap.add_argument("--end", type=parse_ts, default=None,
                     help="extract frames up to this timestamp")
     ap.add_argument("--profile-scan", type=positive_int, default=None, metavar="N",
-                    help="also fetch the uploader's N recent posts (location tags = region prior)")
+                    help="also fetch the uploader's N recent posts (location tags = region "
+                         "prior; Instagram sources only)")
     ap.add_argument("--audio", action="store_true",
                     help="opt-in: extract audio and transcribe via Whisper "
                          "(only when GROQ_API_KEY or OPENAI_API_KEY is set)")
@@ -643,7 +648,12 @@ def _parse_args() -> argparse.Namespace:
                          "(default none = anonymous)")
     ap.add_argument("--cleanup", default=None, metavar="DIR",
                     help="delete tool-created files from an owned workspace DIR, then exit")
-    return ap.parse_args()
+    args = ap.parse_args()
+    # Statically detectable usage error — reject BEFORE any download happens
+    # (extract_frames keeps its own runtime check for clamp/zero-duration edges).
+    if args.start is not None and args.end is not None and args.end <= args.start:
+        ap.error(f"--end ({args.end:g}s) must be after --start ({args.start:g}s)")
+    return args
 
 
 def _resolve_workspace(args: argparse.Namespace) -> Workspace:
@@ -830,8 +840,15 @@ def _build_report(args: argparse.Namespace, source: Source, ws: Workspace,
     profile_posts: "list[dict]" = []
     if args.profile_scan and source.is_url:
         handle = info.get("channel") or info.get("uploader_id")
-        if handle:
+        # scan_profile builds an instagram.com profile URL, so only an Instagram
+        # source has a meaningful (and correct-person) profile to scan — a TikTok
+        # handle would resolve to an unrelated Instagram account.
+        extractor = str(info.get("extractor_key") or info.get("extractor") or "")
+        if handle and "instagram" in extractor.lower():
             profile_posts = scan_profile(handle, args.profile_scan, args.cookies_browser)
+        elif handle:
+            print(f"NOTE: --profile-scan supports Instagram sources only (source "
+                  f"extractor: {extractor or 'unknown'}) — skipping", file=sys.stderr)
 
     return {
         "schema_version": SCHEMA_VERSION,
